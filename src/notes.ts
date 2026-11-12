@@ -5,6 +5,7 @@ export interface Note {
   id: number;
   text: string;
   created: string; // ISO date, YYYY-MM-DD
+  tags?: string[];
 }
 
 export class NotesError extends Error {}
@@ -20,11 +21,29 @@ export function saveNotes(file: string, notes: Note[]): void {
   writeFileSync(file, JSON.stringify(notes, null, 2) + "\n");
 }
 
-export function addNote(notes: Note[], text: string, today: string): Note[] {
+export function normalizeTag(tag: string): string {
+  const clean = tag.trim().toLowerCase();
+  if (!clean) throw new NotesError("a tag cannot be empty");
+  if (/[\s,]/.test(clean)) throw new NotesError(`invalid tag "${clean}": no spaces or commas`);
+  return clean;
+}
+
+function tagsOf(note: Note): string[] {
+  return Array.isArray(note.tags) ? note.tags : [];
+}
+
+export function addNote(notes: Note[], text: string, today: string, tags: string[] = []): Note[] {
   const clean = text.trim();
   if (!clean) throw new NotesError("a note needs some text");
   const id = notes.reduce((max, n) => Math.max(max, n.id), 0) + 1;
-  return [...notes, { id, text: clean, created: today }];
+  const note: Note = { id, text: clean, created: today };
+  if (tags.length > 0) note.tags = [...new Set(tags.map(normalizeTag))];
+  return [...notes, note];
+}
+
+export function filterByTag(notes: Note[], tag: string): Note[] {
+  const wanted = normalizeTag(tag);
+  return notes.filter((n) => tagsOf(n).includes(wanted));
 }
 
 export function deleteNote(notes: Note[], id: number): Note[] {
@@ -32,7 +51,17 @@ export function deleteNote(notes: Note[], id: number): Note[] {
   return notes.filter((n) => n.id !== id);
 }
 
-export function formatList(notes: Note[]): string {
+function formatNote(n: Note): string {
+  const tags = tagsOf(n);
+  const suffix = tags.length > 0 ? ` [${tags.join(", ")}]` : "";
+  return `${n.id}. ${n.text} (${n.created})${suffix}`;
+}
+
+export function formatList(notes: Note[], tag?: string): string {
+  const wanted = tag === undefined ? undefined : normalizeTag(tag);
   if (notes.length === 0) return "No notes yet.";
-  return notes.map((n) => `${n.id}. ${n.text} (${n.created})`).join("\n");
+  if (wanted === undefined) return notes.map(formatNote).join("\n");
+  const shown = filterByTag(notes, wanted);
+  if (shown.length === 0) return `No notes with tag ${wanted}.`;
+  return shown.map(formatNote).join("\n");
 }
