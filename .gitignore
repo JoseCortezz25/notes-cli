@@ -4,3 +4,4 @@ notes.json
 coverage/
 __pycache__/
 .DS_Store
+.atl/
